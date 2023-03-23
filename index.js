@@ -31,7 +31,15 @@ let state = {
 
 }
 
+const a = {
+  x: 300,
+  y: 100,
+  w: 200,
+  h: 100,
+}
+
 draw();
+
 
 
 function draw() {
@@ -69,12 +77,22 @@ function draw() {
     ctx.stroke();
   }
 
+  //temp
+  ctx.beginPath();
+  ctx.rect(
+    a.x + deltaX + state.offset.x,
+    a.y + deltaY + state.offset.y,
+    a.w,
+    a.h,
+  );
+  ctx.fill();
+  ctx.closePath();
 
   // cells
 
   for (const cell of state.cells) {
-    const x = (cell.x + deltaX * state.zoom) + state.offset.x;
-    const y = (cell.y + state.offset.y + deltaY) * state.zoom;
+    const x = (cell.x + state.offset.x) / state.zoom + deltaX;
+    const y = (cell.y + state.offset.y) / state.zoom + deltaY;
 
     ctx.beginPath();
     ctx.rect(x, y, state.gridSize * state.zoom, state.gridSize * state.zoom);
@@ -129,8 +147,8 @@ canvas.onmouseup = () => {
   const deltaX = state.mouse.newPos.x - state.mouse.oldPos.x;
   const deltaY = state.mouse.newPos.y - state.mouse.oldPos.y;
 
-  state.offset.x += deltaX;
-  state.offset.y += deltaY;
+  state.offset.x += deltaX * state.zoom;
+  state.offset.y += deltaY * state.zoom;
 }
 
 
