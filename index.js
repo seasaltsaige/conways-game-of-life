@@ -7,12 +7,18 @@ const ctx = canvas.getContext("2d");
 canvas.width = window.innerWidth;
 canvas.height = window.innerHeight;
 
-
+// the main meat of the simulation and infinite grid
 let state = {
+  // limit how far in and out you can zoom.
+  // -- really only necessary for zooming out, because it just crashes if you zoom too far out
+  // -- too many lines
   MAX_ZOOM: 4,
   MIN_ZOOM: 0.3,
+  // play state
   simulationPaused: true,
+  // current zoom level
   zoom: 1,
+  // 
   _height: canvas.height,
   _width: canvas.width,
   /**
@@ -39,7 +45,8 @@ const drag = document.getElementById("drag-hand");
 const insert = document.getElementById("insert-hand");
 
 
-
+// Util events
+// set cursor to drag screen
 drag.onclick = (ev) => {
   if (drag.classList.contains("active")) return;
   else {
@@ -51,7 +58,7 @@ drag.onclick = (ev) => {
     drag.classList.add("active");
   }
 }
-
+// set cursor to update cells
 insert.onclick = (ev) => {
   if (insert.classList.contains("active")) return;
   else {
@@ -63,21 +70,26 @@ insert.onclick = (ev) => {
     insert.classList.add("active");
   }
 }
-
+// play/pause simulation
 play.onclick = () => {
   state.simulationPaused = !state.simulationPaused;
 }
 
+// main loop
 setInterval(() => {
   simulation();
-}, 20);
+}, 30);
 
 
 function simulation() {
   if (state.simulationPaused) return;
   // main simulation logic
 
-  const killedCells = [];
+  // CALCULATE NEXT GENERATION
+  /**
+   * @type {{x: number, y: number}[]}
+   */
+  const toKillCells = [];
 
   // for each current cell
   for (let i = 0; i < state.cells.length; i++) {
@@ -85,23 +97,49 @@ function simulation() {
     // count the amount of neighbors
     const nCount = calculateNeighbors(cell.x, cell.y);
     if (nCount < 2) {
-      killedCells.push(state.cells.splice(i, 1));
+      toKillCells.push({ x: cell.x, y: cell.y });
       // continue;
     } else if (nCount < 4 && nCount > 1)
       continue;
     else if (nCount > 3)
-      killedCells.push(state.cells.splice(i, 1));
+      toKillCells.push({ x: cell.x, y: cell.y });
   }
 
-  // Ill have to bring cells to life separately somehow...
+  const nearbyDeadCellList = getDeadCells();
 
+  /**
+   * @type {{x: number, y: number}[]}
+   */
+  const cellsToBeBorn = [];
+  // for each dead cell nearby live cells
+  for (const c of nearbyDeadCellList) {
+    // there are duplicates, and this just feels like the best way to handle that
+    if (cellsToBeBorn.find(v => v.x === c.x && v.y === c.y)) continue;
+    const nCount = calculateNeighbors(c.x, c.y);
+    if (nCount === 3) cellsToBeBorn.push({ x: c.x, y: c.y });
+  }
+
+  // UPDATE TO GENERATION
+  for (const cell of toKillCells) {
+    const index = state.cells.findIndex(v => v.x === cell.x && v.y === cell.y);
+    state.cells.splice(index, 1);
+  }
+  for (const cell of cellsToBeBorn) {
+    state.cells.push(cell);
+  }
 
   draw();
 }
 
 /**
+ * Calculates the living count of neighbors next to the 
+ * current x y coords
  * @param {number} x 
  * @param {number} y 
+ * 
+ * ---
+ * |x|
+ * --- : 8 total neighbors to check
  */
 function calculateNeighbors(x, y) {
   let count = 0;
@@ -115,6 +153,33 @@ function calculateNeighbors(x, y) {
   return count;
 }
 
+/**
+ * Function that fetches every DEAD cell that is surounding currently living cells
+ * Dead cells are not stored, so I just use the areas that are not occupied by living cells
+ * that are also nearby living cells
+ * @returns {{x: number, y: number}[]}
+ */
+function getDeadCells() {
+  /**
+   * @type {{x: number, y: number}[]}
+   */
+  const list = [];
+  for (const cell of state.cells) {
+
+    for (let j = -1; j < 2; j++) {
+      for (let i = -1; i < 2; i++) {
+        if (j === 0 && i === 0) continue;
+        const found = state.cells.find((v) => v.x === (cell.x + j) && v.y === (cell.y + i));
+        if (found) continue;
+
+        list.push({ x: cell.x + j, y: cell.y + i });
+      }
+    }
+
+  }
+  return list;
+}
+
 
 draw();
 function draw() {
@@ -124,20 +189,21 @@ function draw() {
   ctx.strokeStyle = "white";
   const deltaX = (state.mouse.newPos.x - state.mouse.oldPos.x);
   const deltaY = (state.mouse.newPos.y - state.mouse.oldPos.y);
-  // console.log(deltaX, deltaY)
+
+  // calculate the new offset, while the screen is moving
+  // and take into account the current zoom level
   const trueOffSet = {
     x: (state.offset.x + deltaX) / state.zoom,
     y: (state.offset.y + deltaY) / state.zoom,
   };
 
-  // col start
+  // col start for lines
   const startX = (trueOffSet.x % state.gridSize) * state.zoom;
-  // row start
+  // row start for lines
   const startY = (trueOffSet.y % state.gridSize) * state.zoom;
 
 
-  // cells
-
+  // draw each cell
   for (const cell of state.cells) {
     const x = (cell.x * state.gridSize + trueOffSet.x) * state.zoom;
     const y = (cell.y * state.gridSize + trueOffSet.y) * state.zoom;
@@ -148,6 +214,7 @@ function draw() {
     ctx.closePath();
 
   }
+
   ctx.lineWidth = state.zoom;
   ctx.strokeStyle = "grey";
 
@@ -173,16 +240,6 @@ function draw() {
 
 function mouseDrag() {
   draw();
-}
-
-
-
-/**
- * @param {UIEvent} ev 
- */
-window.onresize = (ev) => {
-  canvas.width = ev.view.window.innerWidth;
-  canvas.height = ev.view.window.innerHeight;
 }
 
 canvas.onmousedown = (ev) => {
