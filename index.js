@@ -25,25 +25,32 @@ let state = {
    * @type {{x: number, y: number}[]}
    */
   cells: [],
+  // current mouse state
   mouse: {
     // "drag" "insert"
     tool: "drag",
     down: false,
+    // keep track of old pos (click)
+    // and new pos (current during drag)
     oldPos: { x: 0, y: 0 },
     newPos: { x: 0, y: 0 },
   },
+  // the canvas offset
+  // allows the canvas to be drug around, and still render everything
+  // correctly
   offset: {
     x: 0, y: 0,
   },
+  // size of each cell
   gridSize: 50,
 
 }
 
 
-const play = document.getElementById("play");
+const play = document.getElementById("play-pause");
 const drag = document.getElementById("drag-hand");
 const insert = document.getElementById("insert-hand");
-
+const upload = document.getElementById("upload-position");
 
 // Util events
 // set cursor to drag screen
@@ -73,6 +80,23 @@ insert.onclick = (ev) => {
 // play/pause simulation
 play.onclick = () => {
   state.simulationPaused = !state.simulationPaused;
+
+  if (state.simulationPaused) {
+    // set to play icon
+    play.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 163.861 163.861" xml:space="preserve"><g><path d="M34.857,3.613C20.084-4.861,8.107,2.081,8.107,19.106v125.637c0,17.042,11.977,23.975,26.75,15.509L144.67,97.275 c14.778-8.477,14.778-22.211,0-30.686L34.857,3.613z" /></g></svg>`
+  } else {
+    // set to pause icon
+    play.innerHTML = `<svg viewBox="0 0 38 38" xmlns="http://www.w3.org/2000/svg"><line x1="12" y1="8" x2="12" y2="30" stroke="black" stroke-width="8" stroke-linecap="round"/><line x1="27" y1="8" x2="27" y2="30" stroke="black" stroke-width="8" stroke-linecap="round"/></svg>`
+  }
+}
+
+upload.onchange = (ev) => {
+  const files = ev.target.files;
+  const f = files[0];
+  if (!f) return;
+
+  console.log(f);
+
 }
 
 // main loop
@@ -92,30 +116,38 @@ function simulation() {
   const toKillCells = [];
 
   // for each current cell
-  for (let i = 0; i < state.cells.length; i++) {
-    const cell = state.cells[i];
+  for (const cell of state.cells) {
     // count the amount of neighbors
     const nCount = calculateNeighbors(cell.x, cell.y);
-    if (nCount < 2) {
+
+    // 1. Any live cell with fewer than two live neighbours dies, as if by underpopulation.
+    if (nCount < 2)
       toKillCells.push({ x: cell.x, y: cell.y });
-      // continue;
-    } else if (nCount < 4 && nCount > 1)
+
+    // 2. Any live cell with two or three live neighbours lives on to the next generation.
+    else if (nCount < 4 && nCount > 1)
       continue;
+
+    // 3. Any live cell with more than three live neighbours dies, as if by overpopulation.
     else if (nCount > 3)
       toKillCells.push({ x: cell.x, y: cell.y });
   }
-
+  // Find dead cells that need to be evauluated
   const nearbyDeadCellList = getDeadCells();
 
   /**
+   * Next generation cells to come to life
    * @type {{x: number, y: number}[]}
    */
   const cellsToBeBorn = [];
+
   // for each dead cell nearby live cells
   for (const c of nearbyDeadCellList) {
     // there are duplicates, and this just feels like the best way to handle that
     if (cellsToBeBorn.find(v => v.x === c.x && v.y === c.y)) continue;
+    // Count neighbors living cells
     const nCount = calculateNeighbors(c.x, c.y);
+    // 4. Any dead cell with exactly three live neighbours becomes a live cell, as if by reproduction.
     if (nCount === 3) cellsToBeBorn.push({ x: c.x, y: c.y });
   }
 
@@ -180,13 +212,15 @@ function getDeadCells() {
   return list;
 }
 
-
-draw();
 function draw() {
   ctx.fillStyle = "black";
+  // reset the canvas
   ctx.fillRect(0, 0, state._width, state._height);
+
   ctx.fillStyle = "white";
   ctx.strokeStyle = "white";
+
+  // calculate the CHANGE in mouse position
   const deltaX = (state.mouse.newPos.x - state.mouse.oldPos.x);
   const deltaY = (state.mouse.newPos.y - state.mouse.oldPos.y);
 
@@ -218,6 +252,9 @@ function draw() {
   ctx.lineWidth = state.zoom;
   ctx.strokeStyle = "grey";
 
+  // Draw the grid
+
+  // Columns
   for (let i = startX; i < state._width; i += state.gridSize * state.zoom) {
     ctx.beginPath();
     ctx.moveTo(i, 0);
@@ -226,7 +263,7 @@ function draw() {
     ctx.stroke();
   }
 
-
+  // Rows
   for (let j = startY; j < state._height; j += state.gridSize * state.zoom) {
     ctx.beginPath();
     ctx.moveTo(0, j);
@@ -237,12 +274,8 @@ function draw() {
 
 }
 
-
-function mouseDrag() {
-  draw();
-}
-
 canvas.onmousedown = (ev) => {
+  // only update mouse position if we have the drag tool selected
   if (state.mouse.tool === "drag") {
     state.mouse.down = true;
     state.mouse.oldPos.x = ev.clientX;
@@ -250,23 +283,39 @@ canvas.onmousedown = (ev) => {
     state.mouse.newPos.x = ev.clientX;
     state.mouse.newPos.y = ev.clientY;
   } else {
+    // otherwise, populate/kill the clicked cell
+
+    // Mouse x,y position
     const { mouse_x, mouse_y } = {
       mouse_x: ev.clientX,
       mouse_y: ev.clientY
     };
 
+    // relative x,y position to screen offset
     const { relative_x, relative_y } = {
       relative_x: mouse_x - state.offset.x,
       relative_y: mouse_y - state.offset.y
     };
 
-    const x = Math.floor(Math.floor(relative_x / state.zoom / state.gridSize));
-    const y = Math.floor(Math.floor(relative_y / state.zoom / state.gridSize));
+    // adjust for zoom level, and divide by grid size to get
+    // column index
+    const x = Math.floor(
+      relative_x / state.zoom / state.gridSize
+    );
 
+    // same for row index
+    const y = Math.floor(
+      relative_y / state.zoom / state.gridSize
+    );
+
+    // if there is already a cell alive
     const index = state.cells.findIndex(v => v.x === x && v.y === y);
+    // if alive
     if (index !== -1) {
+      // remove from the list
       state.cells.splice(index, 1);
     } else {
+      // otherwise add it
       state.cells.push({
         x, y,
       });
@@ -277,36 +326,43 @@ canvas.onmousedown = (ev) => {
 
 canvas.onmousemove = (ev) => {
   if (!state.mouse.down) return;
-
+  // when the mouse moves, and mouse button is pressed
+  // update mouse position
   state.mouse.newPos.x = ev.clientX;
   state.mouse.newPos.y = ev.clientY;
 
-  mouseDrag();
-
+  // draw new position of grid/cells
+  draw();
 }
 
 
 canvas.onmouseup = (ev) => {
   state.mouse.down = false;
+  // calculate final change in mouse position
   const deltaX = state.mouse.newPos.x - state.mouse.oldPos.x;
   const deltaY = state.mouse.newPos.y - state.mouse.oldPos.y;
 
+  // update canvas offset
+  state.offset.x = (state.offset.x + deltaX);
+  state.offset.y = (state.offset.y + deltaY);
 
-
-  state.offset.x = (state.offset.x + (deltaX));
-  state.offset.y = (state.offset.y + (deltaY));
-
+  // update oldPos and newPos to be equal
   state.mouse.oldPos.x = ev.clientX;
   state.mouse.oldPos.y = ev.clientY;
   state.mouse.newPos.x = ev.clientX;
   state.mouse.newPos.y = ev.clientY;
 
+  // draw new position of grid/cells
   draw();
 
 }
 
 
+// This zoom function is NOT GREAT
+// but it works for now
+// It does NOT zoom relative to cursor. Will need to figure that out
 canvas.onwheel = (ev) => {
+  // Up vs Down scroll
   if (Math.sign(ev.deltaY) === -1) {
     state.zoom += 0.05;
   } else state.zoom -= 0.05;
@@ -316,13 +372,9 @@ canvas.onwheel = (ev) => {
   else if (state.zoom < state.MIN_ZOOM)
     state.zoom = state.MIN_ZOOM;
 
+  // redraw canvas
   draw();
 }
 
-
-function grid() {
-  ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-
-
-}
+// initial draw state
+draw();

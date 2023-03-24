@@ -4,6 +4,7 @@
 // for now if you want to use this, copy the whole array,
 // open the console, and set state.cells equal to it
 // then run the draw() function once from the console, and it should appear
+// I might just use files, idk
 [
   {
     "x": 31,
