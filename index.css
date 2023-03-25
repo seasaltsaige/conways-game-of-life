@@ -1,3 +1,13 @@
+/* h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+  padding: 0;
+  margin: 0;
+} */
+
 body {
   height: 101vh;
   width: 100vw;
@@ -22,13 +32,13 @@ body {
 
 .tool-bar {
   position: absolute;
-  bottom: 20px;
+  bottom: -10px;
   z-index: 1000;
-  width: 400px;
+  width: 100vw;
   height: 150px;
-  left: calc(50% - 200px);
-  border-radius: 20px;
-  background-color: white;
+  left: 0;
+  /* border-radius: 20px; */
+  background-color: #424549;
   border: 1px solid black;
 
   display: flex;
@@ -40,10 +50,20 @@ body {
 
 .icon {
   cursor: pointer;
+  fill: white;
   width: 50px;
   height: 50px;
 }
 
 .active {
-  fill: cadetblue;
+  fill: #7289da;
+}
+
+
+.file-input-button {
+  background-color: indigo;
+  color: white;
+  padding: 0.5rem;
+  border-radius: 0.3rem;
+  cursor: pointer;
 }

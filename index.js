@@ -86,7 +86,7 @@ play.onclick = () => {
     play.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 163.861 163.861" xml:space="preserve"><g><path d="M34.857,3.613C20.084-4.861,8.107,2.081,8.107,19.106v125.637c0,17.042,11.977,23.975,26.75,15.509L144.67,97.275 c14.778-8.477,14.778-22.211,0-30.686L34.857,3.613z" /></g></svg>`
   } else {
     // set to pause icon
-    play.innerHTML = `<svg viewBox="0 0 38 38" xmlns="http://www.w3.org/2000/svg"><line x1="12" y1="8" x2="12" y2="30" stroke="black" stroke-width="8" stroke-linecap="round"/><line x1="27" y1="8" x2="27" y2="30" stroke="black" stroke-width="8" stroke-linecap="round"/></svg>`
+    play.innerHTML = `<svg viewBox="0 0 38 38" xmlns="http://www.w3.org/2000/svg"><line x1="12" y1="8" x2="12" y2="30" stroke="white" stroke-width="8" stroke-linecap="round"/><line x1="27" y1="8" x2="27" y2="30" stroke="white" stroke-width="8" stroke-linecap="round"/></svg>`
   }
 }
 
@@ -95,7 +95,18 @@ upload.onchange = (ev) => {
   const f = files[0];
   if (!f) return;
 
-  console.log(f);
+  const reader = new FileReader();
+  reader.onload = (ev) => {
+    const res = ev.target.result;
+    const data = JSON.parse(res);
+
+    state.cells = data.data;
+    draw();
+  }
+
+  reader.readAsText(f);
+
+
 
 }
 
@@ -213,7 +224,7 @@ function getDeadCells() {
 }
 
 function draw() {
-  ctx.fillStyle = "black";
+  ctx.fillStyle = "#424549";
   // reset the canvas
   ctx.fillRect(0, 0, state._width, state._height);
 
@@ -250,7 +261,7 @@ function draw() {
   }
 
   ctx.lineWidth = state.zoom;
-  ctx.strokeStyle = "grey";
+  ctx.strokeStyle = "#7289da";
 
   // Draw the grid
 
