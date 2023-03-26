@@ -29,6 +29,8 @@ let state = {
   mouse: {
     // "drag" "insert"
     tool: "drag",
+    // "add" or "remove"
+    drawType: "add",
     down: false,
     // keep track of old pos (click)
     // and new pos (current during drag)
@@ -114,7 +116,7 @@ upload.onchange = (ev) => {
 // main loop
 setInterval(() => {
   simulation();
-}, 10);
+}, 30);
 
 
 function simulation() {
@@ -158,10 +160,15 @@ function simulation() {
    */
   const cellsToBeBorn = [];
 
+  // debug
+  let totalNeigborsCounted = 0;
+
   // for each dead cell nearby live cells
   for (const c of nearbyDeadCellList) {
     // Count neighbors living cells
     const nCount = calculateNeighbors(c.x, c.y);
+    // debug
+    totalNeigborsCounted += 8;
     // 4. Any dead cell with exactly three live neighbours becomes a live cell, as if by reproduction.
     if (nCount === 3) cellsToBeBorn.push({ x: c.x, y: c.y });
   }
@@ -177,7 +184,8 @@ function simulation() {
 
   const end = Date.now();
 
-  gen_counter.textContent = "Generation: " + (curGen + 1) + " -- Cell Count: " + state.cells.length + " -- Gen Time: " + ((end - start)) + "ms";
+  // debug info
+  gen_counter.textContent = "Generation: " + (curGen + 1) + " -- Cell Count: " + state.cells.length + " -- Dead Cell Count: " + (nearbyDeadCellList.length) + " -- Dead Cell Neighbors: " + (totalNeigborsCounted) + " -- Gen Time: " + ((end - start)) + "ms";
 
   draw();
 }
@@ -308,16 +316,18 @@ canvas.onmousedown = (ev) => {
     state.mouse.newPos.x = ev.clientX;
     state.mouse.newPos.y = ev.clientY;
   } else {
+    state.mouse.down = true;
     const { x, y } = getCellFromMouse(ev.clientX, ev.clientY);
-
     // if there is already a cell alive
     const index = state.cells.findIndex(v => v.x === x && v.y === y);
     // if alive
     if (index !== -1) {
+      state.mouse.drawType = "remove";
       // remove from the list
       state.cells.splice(index, 1);
     } else {
       // otherwise add it
+      state.mouse.drawType = "add";
       state.cells.push({
         x, y,
       });
@@ -325,7 +335,6 @@ canvas.onmousedown = (ev) => {
 
   }
 }
-
 canvas.onmousemove = (ev) => {
 
 
@@ -335,11 +344,37 @@ canvas.onmousemove = (ev) => {
     state.mouse.newPos.x = ev.clientX;
     state.mouse.newPos.y = ev.clientY;
   } else {
-    // when the mouse moves, and mouse button is pressed
-    // update mouse position
-    state.mouse.newPos.x = ev.clientX;
-    state.mouse.newPos.y = ev.clientY;
 
+
+    if (state.mouse.tool === "insert") {
+      const x = ev.clientX;
+      const y = ev.clientY;
+
+      const cell = getCellFromMouse(x, y);
+      // if there is already a cell alive
+      const index = state.cells.findIndex(v => v.x === cell.x && v.y === cell.y);
+      // if alive
+      if (index !== -1) {
+
+        // remove from the list
+        if (state.mouse.drawType === "remove")
+          state.cells.splice(index, 1);
+
+
+      } else {
+        // otherwise add it
+        if (state.mouse.drawType === "add")
+          state.cells.push({
+            x: cell.x, y: cell.y,
+          });
+      }
+
+    } else {
+      // when the mouse moves, and mouse button is pressed
+      // update mouse position
+      state.mouse.newPos.x = ev.clientX;
+      state.mouse.newPos.y = ev.clientY;
+    }
     // draw new position of grid/cells
     draw();
   }
@@ -348,6 +383,7 @@ canvas.onmousemove = (ev) => {
 
 canvas.onmouseup = (ev) => {
   state.mouse.down = false;
+  dragCells = [];
   // calculate final change in mouse position
   const deltaX = state.mouse.newPos.x - state.mouse.oldPos.x;
   const deltaY = state.mouse.newPos.y - state.mouse.oldPos.y;
