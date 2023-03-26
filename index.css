@@ -8,6 +8,15 @@ h6 {
   margin: 0;
 } */
 
+.gen {
+  position: absolute;
+  color: white;
+  font-weight: bold;
+  font-family: sans-serif;
+  left: 20px;
+}
+
+
 body {
   height: 101vh;
   width: 100vw;

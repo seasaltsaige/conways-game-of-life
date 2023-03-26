@@ -13,7 +13,7 @@ let state = {
   // -- really only necessary for zooming out, because it just crashes if you zoom too far out
   // -- too many lines
   MAX_ZOOM: 4,
-  MIN_ZOOM: 0.3,
+  MIN_ZOOM: 0.0001,
   // play state
   simulationPaused: true,
   // current zoom level
@@ -51,6 +51,7 @@ const play = document.getElementById("play-pause");
 const drag = document.getElementById("drag-hand");
 const insert = document.getElementById("insert-hand");
 const upload = document.getElementById("upload-position");
+const gen_counter = document.querySelector(".gen");
 
 // Util events
 // set cursor to drag screen
@@ -113,11 +114,16 @@ upload.onchange = (ev) => {
 // main loop
 setInterval(() => {
   simulation();
-}, 30);
+}, 10);
 
 
 function simulation() {
   if (state.simulationPaused) return;
+  const start = Date.now();
+
+  const t = gen_counter.textContent;
+  const curGen = parseInt(t.split(": ")[1]);
+
   // main simulation logic
 
   // CALCULATE NEXT GENERATION
@@ -154,8 +160,6 @@ function simulation() {
 
   // for each dead cell nearby live cells
   for (const c of nearbyDeadCellList) {
-    // there are duplicates, and this just feels like the best way to handle that
-    if (cellsToBeBorn.find(v => v.x === c.x && v.y === c.y)) continue;
     // Count neighbors living cells
     const nCount = calculateNeighbors(c.x, c.y);
     // 4. Any dead cell with exactly three live neighbours becomes a live cell, as if by reproduction.
@@ -170,6 +174,10 @@ function simulation() {
   for (const cell of cellsToBeBorn) {
     state.cells.push(cell);
   }
+
+  const end = Date.now();
+
+  gen_counter.textContent = "Generation: " + (curGen + 1) + " -- Cell Count: " + state.cells.length + " -- Gen Time: " + ((end - start)) + "ms";
 
   draw();
 }
@@ -214,6 +222,9 @@ function getDeadCells() {
         if (j === 0 && i === 0) continue;
         const found = state.cells.find((v) => v.x === (cell.x + j) && v.y === (cell.y + i));
         if (found) continue;
+
+        // this should filter out repeated dead cells
+        if (list.find(v => v.x === (cell.x + j) && v.y === (cell.y + i))) continue;
 
         list.push({ x: cell.x + j, y: cell.y + i });
       }
@@ -260,27 +271,30 @@ function draw() {
 
   }
 
-  ctx.lineWidth = state.zoom;
-  ctx.strokeStyle = "#7289da";
+  // literally just dont draw the grid if you're zoomed out that much
+  if (state.zoom > 0.05) {
+    ctx.lineWidth = state.zoom;
+    ctx.strokeStyle = "#7289da";
 
-  // Draw the grid
+    // Draw the grid
 
-  // Columns
-  for (let i = startX; i < state._width; i += state.gridSize * state.zoom) {
-    ctx.beginPath();
-    ctx.moveTo(i, 0);
-    ctx.lineTo(i, state._height);
-    ctx.closePath();
-    ctx.stroke();
-  }
+    // Columns
+    for (let i = startX; i < state._width; i += state.gridSize * state.zoom) {
+      ctx.beginPath();
+      ctx.moveTo(i, 0);
+      ctx.lineTo(i, state._height);
+      ctx.closePath();
+      ctx.stroke();
+    }
 
-  // Rows
-  for (let j = startY; j < state._height; j += state.gridSize * state.zoom) {
-    ctx.beginPath();
-    ctx.moveTo(0, j);
-    ctx.lineTo(state._width, j);
-    ctx.closePath();
-    ctx.stroke();
+    // Rows
+    for (let j = startY; j < state._height; j += state.gridSize * state.zoom) {
+      ctx.beginPath();
+      ctx.moveTo(0, j);
+      ctx.lineTo(state._width, j);
+      ctx.closePath();
+      ctx.stroke();
+    }
   }
 
 }
@@ -294,30 +308,7 @@ canvas.onmousedown = (ev) => {
     state.mouse.newPos.x = ev.clientX;
     state.mouse.newPos.y = ev.clientY;
   } else {
-    // otherwise, populate/kill the clicked cell
-
-    // Mouse x,y position
-    const { mouse_x, mouse_y } = {
-      mouse_x: ev.clientX,
-      mouse_y: ev.clientY
-    };
-
-    // relative x,y position to screen offset
-    const { relative_x, relative_y } = {
-      relative_x: mouse_x - state.offset.x,
-      relative_y: mouse_y - state.offset.y
-    };
-
-    // adjust for zoom level, and divide by grid size to get
-    // column index
-    const x = Math.floor(
-      relative_x / state.zoom / state.gridSize
-    );
-
-    // same for row index
-    const y = Math.floor(
-      relative_y / state.zoom / state.gridSize
-    );
+    const { x, y } = getCellFromMouse(ev.clientX, ev.clientY);
 
     // if there is already a cell alive
     const index = state.cells.findIndex(v => v.x === x && v.y === y);
@@ -336,14 +327,22 @@ canvas.onmousedown = (ev) => {
 }
 
 canvas.onmousemove = (ev) => {
-  if (!state.mouse.down) return;
-  // when the mouse moves, and mouse button is pressed
-  // update mouse position
-  state.mouse.newPos.x = ev.clientX;
-  state.mouse.newPos.y = ev.clientY;
 
-  // draw new position of grid/cells
-  draw();
+
+  if (!state.mouse.down) {
+    state.mouse.oldPos.x = ev.clientX;
+    state.mouse.oldPos.y = ev.clientY;
+    state.mouse.newPos.x = ev.clientX;
+    state.mouse.newPos.y = ev.clientY;
+  } else {
+    // when the mouse moves, and mouse button is pressed
+    // update mouse position
+    state.mouse.newPos.x = ev.clientX;
+    state.mouse.newPos.y = ev.clientY;
+
+    // draw new position of grid/cells
+    draw();
+  }
 }
 
 
@@ -373,18 +372,68 @@ canvas.onmouseup = (ev) => {
 // but it works for now
 // It does NOT zoom relative to cursor. Will need to figure that out
 canvas.onwheel = (ev) => {
+
+  // calculate old position, before zoom change
+  const oldRelativePos = {
+    x: (ev.clientX - state.offset.x) / state.zoom,
+    y: (ev.clientY - state.offset.y) / state.zoom,
+  };
+
   // Up vs Down scroll
   if (Math.sign(ev.deltaY) === -1) {
-    state.zoom += 0.05;
-  } else state.zoom -= 0.05;
-
+    state.zoom += (state.zoom / 4);
+  } else state.zoom -= (state.zoom / 4);
   if (state.zoom > state.MAX_ZOOM)
     state.zoom = state.MAX_ZOOM;
   else if (state.zoom < state.MIN_ZOOM)
     state.zoom = state.MIN_ZOOM;
 
+  // goal: keep mouse on same cell
+
+  // calculate new position, after zoom change
+  const newRelativePos = {
+    x: (ev.clientX - state.offset.x) / state.zoom,
+    y: (ev.clientY - state.offset.y) / state.zoom,
+  };
+
+  // get the offset
+  const offSet = {
+    x: newRelativePos.x - oldRelativePos.x,
+    y: newRelativePos.y - oldRelativePos.y
+  };
+
+  // apply it (taking zoom back into account)
+  state.offset.x += offSet.x * state.zoom;
+  state.offset.y += offSet.y * state.zoom;
+
   // redraw canvas
   draw();
+}
+
+/**
+ * 
+ * @param {number} x 
+ * @param {number} y 
+ */
+function getCellFromMouse(x, y) {
+  // relative x,y position to screen offset
+  const { relative_x, relative_y } = {
+    relative_x: x - state.offset.x,
+    relative_y: y - state.offset.y
+  };
+
+  // adjust for zoom level, and divide by grid size to get
+  // column index
+  const x_final = Math.floor(
+    relative_x / state.zoom / state.gridSize
+  );
+
+  // same for row index
+  const y_final = Math.floor(
+    relative_y / state.zoom / state.gridSize
+  );
+
+  return { x: x_final, y: y_final };
 }
 
 // initial draw state
